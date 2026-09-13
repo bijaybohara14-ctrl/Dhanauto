@@ -1,0 +1,15 @@
+name: dhanauto
+description: Dhanauto ride sharing MVP with map-ready booking flow
+publish_to: "none"
+version: 1.0.0+2
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_maps_flutter: ^2.10.1
+
+flutter:
+  uses-material-design: true
