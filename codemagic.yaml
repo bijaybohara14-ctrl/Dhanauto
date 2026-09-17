@@ -1,14 +1,42 @@
 workflows:
   dhanauto_android:
     name: Dhanauto Android APK
+
     environment:
       flutter: stable
+      groups:
+        - Dhanauto
+
     scripts:
       - name: Create Android platform files
         script: flutter create --platforms=android --org com.dhanauto .
+
+      - name: Add Google Maps API key
+        script: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          key = os.environ["MAPS_API_KEY"]
+
+          meta = f'        <meta-data android:name="com.google.android.geo.API_KEY" android:value="{key}"/>'
+
+          text = text.replace(
+              "</application>",
+              meta + "\n    </application>"
+          )
+
+          manifest.write_text(text)
+          PY
+
       - name: Get dependencies
         script: flutter pub get
+
       - name: Build release APK
         script: flutter build apk --release
+
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
