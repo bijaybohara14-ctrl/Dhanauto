@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "12103266063",
+    "project_id": "dhanauto-cd7b8",
+    "storage_bucket": "dhanauto-cd7b8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12103266063:android:bcc977159e1c1521d2187a",
+        "android_client_info": {
+          "package_name": "com.dhanauto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmrUqBO5y0v3_v6cQ8t-Em0Tozc6j16CY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
