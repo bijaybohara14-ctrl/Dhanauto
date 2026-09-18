@@ -58,6 +58,7 @@ class _HomePageState extends State<HomePage> {
       TextEditingController();
 
   Timer? searchTimer;
+  StreamSubscription<Position>? positionStream;
 
   String activeField = 'pickup';
 
@@ -71,57 +72,65 @@ class _HomePageState extends State<HomePage> {
 
   bool searching = false;
   bool gettingLocation = false;
+  bool followLiveLocation = true;
 
   @override
   void initState() {
     super.initState();
-    _getLiveLocation();
+    _startLiveLocation();
   }
 
   @override
   void dispose() {
+    positionStream?.cancel();
     searchTimer?.cancel();
+
     pickupController.dispose();
     destinationController.dispose();
+
     super.dispose();
   }
 
-  Future<void> _getLiveLocation() async {
+  Future<void> _startLiveLocation() async {
     setState(() {
       gettingLocation = true;
     });
 
+    bool serviceEnabled =
+        await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      setState(() {
+        gettingLocation = false;
+      });
+
+      _showMessage(
+        'Location service ON गर्नुहोस्।',
+      );
+      return;
+    }
+
+    LocationPermission permission =
+        await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission =
+          await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      setState(() {
+        gettingLocation = false;
+      });
+
+      _showMessage(
+        'Live location permission चाहिन्छ।',
+      );
+      return;
+    }
+
     try {
-      bool serviceEnabled =
-          await Geolocator.isLocationServiceEnabled();
-
-      if (!serviceEnabled) {
-        if (mounted) {
-          _showMessage(
-            'Location service ON गर्नुहोस्।',
-          );
-        }
-        return;
-      }
-
-      LocationPermission permission =
-          await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission =
-            await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          _showMessage(
-            'Live location permission चाहिन्छ।',
-          );
-        }
-        return;
-      }
-
       Position position =
           await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -129,42 +138,78 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      LatLng live = LatLng(
+      final LatLng live = LatLng(
         position.latitude,
         position.longitude,
       );
 
-      if (!_insideArea(live)) {
-        if (mounted) {
-          _showMessage(
-            'यो location Dhanauto service area बाहिर छ।',
-          );
-        }
-        return;
-      }
-
-      setState(() {
-        currentLocation = live;
-        pickupLocation = live;
-
-        pickupController.text =
-            'My live location';
+      if (_insideArea(live)) {
+        setState(() {
+          currentLocation = live;
+          pickupLocation = live;
+          pickupController.text =
+              'My live location';
+        });
 
         _updateMarkers();
-      });
 
-      await mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          live,
-          14,
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
+        await mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            live,
+            15,
+          ),
+        );
+      } else {
         _showMessage(
-          'Live location लिन सकिएन।',
+          'तपाईंको location Dhanauto service area बाहिर छ।',
         );
       }
+
+      // Continuous live GPS
+      positionStream?.cancel();
+
+      positionStream =
+          Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        ),
+      ).listen(
+        (Position position) {
+          final LatLng live = LatLng(
+            position.latitude,
+            position.longitude,
+          );
+
+          if (!_insideArea(live)) {
+            return;
+          }
+
+          if (!mounted) return;
+
+          setState(() {
+            currentLocation = live;
+
+            // A = user's continuously updated live location
+            pickupLocation = live;
+          });
+
+          _updateMarkers();
+
+          if (followLiveLocation &&
+              mapController != null) {
+            mapController!.animateCamera(
+              CameraUpdate.newLatLng(
+                live,
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      _showMessage(
+        'Live location लिन सकिएन।',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -182,23 +227,10 @@ class _HomePageState extends State<HomePage> {
         Marker(
           markerId: const MarkerId('pickup'),
           position: pickupLocation!,
-          draggable: true,
+          draggable: false,
           infoWindow: const InfoWindow(
             title: 'A - Pickup',
           ),
-          onDragEnd: (LatLng newPosition) {
-            if (!_insideArea(newPosition)) {
-              _showMessage(
-                'यो location service area बाहिर छ।',
-              );
-              _updateMarkers();
-              return;
-            }
-
-            setState(() {
-              pickupLocation = newPosition;
-            });
-          },
         ),
       );
     }
@@ -217,6 +249,7 @@ class _HomePageState extends State<HomePage> {
               _showMessage(
                 'यो location service area बाहिर छ।',
               );
+
               _updateMarkers();
               return;
             }
@@ -229,9 +262,11 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    setState(() {
-      markers = newMarkers;
-    });
+    if (mounted) {
+      setState(() {
+        markers = newMarkers;
+      });
+    }
   }
 
   void _onMapTap(LatLng position) {
@@ -243,9 +278,12 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (activeField == 'pickup') {
+      // Map बाट A manually select गर्दा live follow बन्द
       setState(() {
+        followLiveLocation = false;
         pickupLocation = position;
-        pickupController.text = 'Selected location';
+        pickupController.text =
+            'Selected location';
       });
     } else {
       setState(() {
@@ -303,8 +341,6 @@ class _HomePageState extends State<HomePage> {
         body: jsonEncode({
           'input': input,
           'languageCode': 'en',
-
-          // Service area:
           'locationRestriction': {
             'rectangle': {
               'low': {
@@ -429,6 +465,7 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         if (activeField == 'pickup') {
+          followLiveLocation = false;
           pickupLocation = point;
           pickupController.text = name;
         } else {
@@ -524,14 +561,18 @@ class _HomePageState extends State<HomePage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+
               const SizedBox(height: 10),
+
               const Text(
                 'Estimated fare',
                 style: TextStyle(
                   fontSize: 15,
                 ),
               ),
+
               const SizedBox(height: 4),
+
               const Text(
                 'Rs. 120',
                 style: TextStyle(
@@ -539,7 +580,9 @@ class _HomePageState extends State<HomePage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+
               const SizedBox(height: 20),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -555,6 +598,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 10),
             ],
           ),
@@ -574,11 +618,15 @@ class _HomePageState extends State<HomePage> {
               target: defaultCenter,
               zoom: 8,
             ),
+
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
+
             zoomControlsEnabled: false,
             compassEnabled: true,
+
             markers: markers,
+
             onMapCreated: (controller) {
               mapController = controller;
 
@@ -586,11 +634,12 @@ class _HomePageState extends State<HomePage> {
                 controller.animateCamera(
                   CameraUpdate.newLatLngZoom(
                     currentLocation!,
-                    14,
+                    15,
                   ),
                 );
               }
             },
+
             onTap: _onMapTap,
           ),
 
@@ -598,7 +647,8 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               children: [
                 Container(
-                  margin: const EdgeInsets.all(12),
+                  margin:
+                      const EdgeInsets.all(12),
                   padding:
                       const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -631,7 +681,9 @@ class _HomePageState extends State<HomePage> {
                           color: Colors.white,
                         ),
                       ),
+
                       const SizedBox(width: 12),
+
                       const Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -747,35 +799,4 @@ class _HomePageState extends State<HomePage> {
                                       '',
                                 ),
                                 onTap: () {
-                                  selectPlace(
-                                    item,
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 20,
-            child: Column(
-              children: [
-                if (gettingLocation)
-                  Container(
-                    margin:
-                        const EdgeInsets.only(
-                      bottom: 8,
-                    ),
-                    padding:
-                        const EdgeInsets.all(10),
-                    decoration:
-                        BoxDecoration(
-                      color: 
+                                 
