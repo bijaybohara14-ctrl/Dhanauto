@@ -173,7 +173,6 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      // Continuous live GPS
       await positionStream?.cancel();
 
       positionStream =
@@ -198,7 +197,6 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             currentLocation = live;
 
-            // A = continuously updated live location
             if (followLiveLocation) {
               pickupLocation = live;
               pickupController.text =
@@ -292,7 +290,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (activeField == 'pickup') {
-      // Map बाट A manually select गर्दा live follow बन्द
       setState(() {
         followLiveLocation = false;
         pickupLocation = position;
@@ -642,15 +639,11 @@ class _HomePageState extends State<HomePage> {
               target: defaultCenter,
               zoom: 8,
             ),
-
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-
             zoomControlsEnabled: false,
             compassEnabled: true,
-
             markers: markers,
-
             onMapCreated: (controller) {
               mapController = controller;
 
@@ -663,7 +656,6 @@ class _HomePageState extends State<HomePage> {
                 );
               }
             },
-
             onTap: _onMapTap,
           ),
 
@@ -811,4 +803,8 @@ class _HomePageState extends State<HomePage> {
                                 suggestions.length,
                             itemBuilder:
                                 (context, index) {
-                              fina
+                              final suggestion =
+                                  suggestions[index];
+
+                              return ListTile(
+                             
