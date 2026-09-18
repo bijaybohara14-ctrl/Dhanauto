@@ -11,7 +11,6 @@ dependencies:
     sdk: flutter
   google_maps_flutter: ^2.10.1
   geolocator: ^14.0.2
-  geocoding: ^3.0.0
   http: ^1.5.0
 flutter:
   uses-material-design: true
