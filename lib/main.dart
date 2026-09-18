@@ -92,14 +92,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _startLiveLocation() async {
+    if (!mounted) return;
+
     setState(() {
       gettingLocation = true;
+      followLiveLocation = true;
     });
 
     bool serviceEnabled =
         await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
+      if (!mounted) return;
+
       setState(() {
         gettingLocation = false;
       });
@@ -120,6 +125,8 @@ class _HomePageState extends State<HomePage> {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+
       setState(() {
         gettingLocation = false;
       });
@@ -144,11 +151,12 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (_insideArea(live)) {
+        if (!mounted) return;
+
         setState(() {
           currentLocation = live;
           pickupLocation = live;
-          pickupController.text =
-              'My live location';
+          pickupController.text = 'My live location';
         });
 
         _updateMarkers();
@@ -166,7 +174,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       // Continuous live GPS
-      positionStream?.cancel();
+      await positionStream?.cancel();
 
       positionStream =
           Geolocator.getPositionStream(
@@ -190,8 +198,12 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             currentLocation = live;
 
-            // A = user's continuously updated live location
-            pickupLocation = live;
+            // A = continuously updated live location
+            if (followLiveLocation) {
+              pickupLocation = live;
+              pickupController.text =
+                  'My live location';
+            }
           });
 
           _updateMarkers();
@@ -249,14 +261,16 @@ class _HomePageState extends State<HomePage> {
               _showMessage(
                 'यो location service area बाहिर छ।',
               );
-
-              _updateMarkers();
               return;
             }
+
+            if (!mounted) return;
 
             setState(() {
               destinationLocation = newPosition;
             });
+
+            _updateMarkers();
           },
         ),
       );
@@ -300,6 +314,8 @@ class _HomePageState extends State<HomePage> {
     searchTimer?.cancel();
 
     if (value.trim().length < 2) {
+      if (!mounted) return;
+
       setState(() {
         suggestions = [];
       });
@@ -318,6 +334,8 @@ class _HomePageState extends State<HomePage> {
     if (mapsApiKey.isEmpty) {
       return;
     }
+
+    if (!mounted) return;
 
     setState(() {
       searching = true;
@@ -357,14 +375,15 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (response.statusCode != 200) {
-        setState(() {
-          suggestions = [];
-        });
+        if (mounted) {
+          setState(() {
+            suggestions = [];
+          });
+        }
         return;
       }
 
-      final data =
-          jsonDecode(response.body);
+      final data = jsonDecode(response.body);
 
       final List<Map<String, dynamic>> result = [];
 
@@ -380,21 +399,23 @@ class _HomePageState extends State<HomePage> {
         }
 
         result.add({
-          'placeId':
-              prediction['placeId'],
+          'placeId': prediction['placeId'],
           'text':
-              prediction['text']?['text'] ??
-                  '',
+              prediction['text']?['text'] ?? '',
         });
       }
 
-      setState(() {
-        suggestions = result;
-      });
+      if (mounted) {
+        setState(() {
+          suggestions = result;
+        });
+      }
     } catch (e) {
-      setState(() {
-        suggestions = [];
-      });
+      if (mounted) {
+        setState(() {
+          suggestions = [];
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -433,14 +454,15 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (response.statusCode != 200) {
+        _showMessage(
+          'Location खोज्न सकिएन।',
+        );
         return;
       }
 
-      final data =
-          jsonDecode(response.body);
+      final data = jsonDecode(response.body);
 
-      final location =
-          data['location'];
+      final location = data['location'];
 
       if (location == null) {
         return;
@@ -462,6 +484,8 @@ class _HomePageState extends State<HomePage> {
           data['displayName']?['text'] ??
               suggestion['text'] ??
               'Selected location';
+
+      if (!mounted) return;
 
       setState(() {
         if (activeField == 'pickup') {
@@ -760,6 +784,10 @@ class _HomePageState extends State<HomePage> {
                               const EdgeInsets.only(
                             top: 5,
                           ),
+                          constraints:
+                              const BoxConstraints(
+                            maxHeight: 250,
+                          ),
                           decoration:
                               BoxDecoration(
                             color: Colors.white,
@@ -783,20 +811,4 @@ class _HomePageState extends State<HomePage> {
                                 suggestions.length,
                             itemBuilder:
                                 (context, index) {
-                              final item =
-                                  suggestions[
-                                      index];
-
-                              return ListTile(
-                                leading:
-                                    const Icon(
-                                  Icons.place,
-                                  color:
-                                      Colors.red,
-                                ),
-                                title: Text(
-                                  item['text'] ??
-                                      '',
-                                ),
-                                onTap: () {
-                                 
+                              fina
