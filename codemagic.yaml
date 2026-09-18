@@ -57,6 +57,6 @@ workflows:
 
       - name: Build release APK
         script: flutter build apk --release
-
+        --dart-define=MAPS_API_KEY=$MAPS_API_KEY
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
