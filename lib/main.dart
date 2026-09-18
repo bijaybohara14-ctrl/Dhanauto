@@ -11,15 +11,17 @@ const String mapsApiKey =
 
 const LatLng defaultCenter = LatLng(28.70, 80.60);
 
-// Dhanauto service/search area:
-// Mahendranagar → Fulbari → Dhangadhi → Karnali आसपास
+// Dhangadhi • Fulbari • Mahendranagar • Karnali area
 const double minLat = 28.20;
 const double minLng = 80.00;
 const double maxLat = 30.80;
 const double maxLng = 82.90;
 
-void main() {
-  runApp(const DhanautoApp());
+bool _insideArea(LatLng p) {
+  return p.latitude >= minLat &&
+      p.latitude <= maxLat &&
+      p.longitude >= minLng &&
+      p.longitude <= maxLng;
 }
 
 class DhanautoApp extends StatelessWidget {
@@ -31,74 +33,49 @@ class DhanautoApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Dhanauto',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
         useMaterial3: true,
+        colorSchemeSeed: Colors.red,
       ),
-      home: const DhanautoHome(),
+      home: const HomePage(),
     );
   }
 }
 
-class DhanautoHome extends StatefulWidget {
-  const DhanautoHome({super.key});
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<DhanautoHome> createState() => _DhanautoHomeState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _DhanautoHomeState extends State<DhanautoHome> {
+class _HomePageState extends State<HomePage> {
   GoogleMapController? mapController;
 
-  LatLng pickup = defaultCenter;
-  LatLng? destination;
+  final TextEditingController pickupController =
+      TextEditingController();
 
-  final pickupController = TextEditingController();
-  final destinationController = TextEditingController();
+  final TextEditingController destinationController =
+      TextEditingController();
 
   Timer? searchTimer;
+
   String activeField = 'pickup';
-  bool searching = false;
+
+  LatLng? currentLocation;
+  LatLng? pickupLocation;
+  LatLng? destinationLocation;
+
+  Set<Marker> markers = {};
 
   List<Map<String, dynamic>> suggestions = [];
 
-  Set<Marker> get markers {
-    final result = <Marker>{
-      Marker(
-        markerId: const MarkerId('pickup'),
-        position: pickup,
-        draggable: true,
-        infoWindow: const InfoWindow(title: 'Pickup'),
-        onDragEnd: (p) {
-          if (_insideArea(p)) {
-            setState(() => pickup = p);
-          }
-        },
-      ),
-    };
-
-    if (destination != null) {
-      result.add(
-        Marker(
-          markerId: const MarkerId('destination'),
-          position: destination!,
-          draggable: true,
-          infoWindow: const InfoWindow(title: 'Destination'),
-          onDragEnd: (p) {
-            if (_insideArea(p)) {
-              setState(() => destination = p);
-            }
-          },
-        ),
-      );
-    }
-
-    return result;
-  }
+  bool searching = false;
+  bool gettingLocation = false;
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _getLiveLocation();
   }
 
   @override
@@ -109,64 +86,198 @@ class _DhanautoHomeState extends State<DhanautoHome> {
     super.dispose();
   }
 
-  bool _insideArea(LatLng point) {
-    return point.latitude >= minLat &&
-        point.latitude <= maxLat &&
-        point.longitude >= minLng &&
-        point.longitude <= maxLng;
-  }
+  Future<void> _getLiveLocation() async {
+    setState(() {
+      gettingLocation = true;
+    });
 
-  Future<void> _getCurrentLocation() async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
+      bool serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
 
-      var permission = await Geolocator.checkPermission();
+      if (!serviceEnabled) {
+        if (mounted) {
+          _showMessage(
+            'Location service ON गर्नुहोस्।',
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission =
+          await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+        permission =
+            await Geolocator.requestPermission();
       }
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          _showMessage(
+            'Live location permission चाहिन्छ।',
+          );
+        }
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      Position position =
+          await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
 
-      final current = LatLng(
+      LatLng live = LatLng(
         position.latitude,
         position.longitude,
       );
 
-      if (_insideArea(current)) {
-        setState(() {
-          pickup = current;
-        });
+      if (!_insideArea(live)) {
+        if (mounted) {
+          _showMessage(
+            'यो location Dhanauto service area बाहिर छ।',
+          );
+        }
+        return;
+      }
 
-        await mapController?.animateCamera(
-          CameraUpdate.newLatLngZoom(current, 13),
+      setState(() {
+        currentLocation = live;
+        pickupLocation = live;
+
+        pickupController.text =
+            'My live location';
+
+        _updateMarkers();
+      });
+
+      await mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          live,
+          14,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        _showMessage(
+          'Live location लिन सकिएन।',
         );
       }
-    } catch (_) {}
+    } finally {
+      if (mounted) {
+        setState(() {
+          gettingLocation = false;
+        });
+      }
+    }
   }
 
-  void _onSearchChanged(String value) {
+  void _updateMarkers() {
+    final Set<Marker> newMarkers = {};
+
+    if (pickupLocation != null) {
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('pickup'),
+          position: pickupLocation!,
+          draggable: true,
+          infoWindow: const InfoWindow(
+            title: 'A - Pickup',
+          ),
+          onDragEnd: (LatLng newPosition) {
+            if (!_insideArea(newPosition)) {
+              _showMessage(
+                'यो location service area बाहिर छ।',
+              );
+              _updateMarkers();
+              return;
+            }
+
+            setState(() {
+              pickupLocation = newPosition;
+            });
+          },
+        ),
+      );
+    }
+
+    if (destinationLocation != null) {
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('destination'),
+          position: destinationLocation!,
+          draggable: true,
+          infoWindow: const InfoWindow(
+            title: 'B - Destination',
+          ),
+          onDragEnd: (LatLng newPosition) {
+            if (!_insideArea(newPosition)) {
+              _showMessage(
+                'यो location service area बाहिर छ।',
+              );
+              _updateMarkers();
+              return;
+            }
+
+            setState(() {
+              destinationLocation = newPosition;
+            });
+          },
+        ),
+      );
+    }
+
+    setState(() {
+      markers = newMarkers;
+    });
+  }
+
+  void _onMapTap(LatLng position) {
+    if (!_insideArea(position)) {
+      _showMessage(
+        'यो location Dhanauto service area बाहिर छ।',
+      );
+      return;
+    }
+
+    if (activeField == 'pickup') {
+      setState(() {
+        pickupLocation = position;
+        pickupController.text = 'Selected location';
+      });
+    } else {
+      setState(() {
+        destinationLocation = position;
+        destinationController.text =
+            'Selected location';
+      });
+    }
+
+    _updateMarkers();
+  }
+
+  void _onTextChanged(String value) {
     searchTimer?.cancel();
+
+    if (value.trim().length < 2) {
+      setState(() {
+        suggestions = [];
+      });
+      return;
+    }
 
     searchTimer = Timer(
       const Duration(milliseconds: 500),
       () {
-        searchPlaces(value);
+        searchPlaces(value.trim());
       },
     );
   }
 
   Future<void> searchPlaces(String input) async {
-    if (mapsApiKey.isEmpty || input.trim().length < 2) {
-      setState(() {
-        suggestions = [];
-        searching = false;
-      });
+    if (mapsApiKey.isEmpty) {
       return;
     }
 
@@ -175,10 +286,12 @@ class _DhanautoHomeState extends State<DhanautoHome> {
     });
 
     try {
+      final Uri url = Uri.parse(
+        'https://places.googleapis.com/v1/places:autocomplete',
+      );
+
       final response = await http.post(
-        Uri.parse(
-          'https://places.googleapis.com/v1/places:autocomplete',
-        ),
+        url,
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': mapsApiKey,
@@ -188,11 +301,10 @@ class _DhanautoHomeState extends State<DhanautoHome> {
               'suggestions.placePrediction.structuredFormat',
         },
         body: jsonEncode({
-          'input': input.trim(),
+          'input': input,
           'languageCode': 'en',
 
-          // Strict rectangle:
-          // Mahendranagar + Fulbari + Dhangadhi + Karnali आसपास
+          // Service area:
           'locationRestriction': {
             'rectangle': {
               'low': {
@@ -211,44 +323,45 @@ class _DhanautoHomeState extends State<DhanautoHome> {
       if (response.statusCode != 200) {
         setState(() {
           suggestions = [];
-          searching = false;
         });
         return;
       }
 
-      final data = jsonDecode(response.body);
+      final data =
+          jsonDecode(response.body);
 
-      final rawSuggestions =
-          data['suggestions'] as List? ?? [];
+      final List<Map<String, dynamic>> result = [];
 
-      final results = <Map<String, dynamic>>[];
+      final List<dynamic> list =
+          data['suggestions'] ?? [];
 
-      for (final item in rawSuggestions) {
-        final prediction = item['placePrediction'];
+      for (final item in list) {
+        final prediction =
+            item['placePrediction'];
 
-        if (prediction == null) continue;
-
-        final placeId = prediction['placeId'];
-        final text = prediction['text']?['text'];
-
-        if (placeId != null && text != null) {
-          results.add({
-            'placeId': placeId,
-            'text': text,
-          });
+        if (prediction == null) {
+          continue;
         }
-      }
 
-      if (mounted) {
-        setState(() {
-          suggestions = results;
-          searching = false;
+        result.add({
+          'placeId':
+              prediction['placeId'],
+          'text':
+              prediction['text']?['text'] ??
+                  '',
         });
       }
-    } catch (_) {
+
+      setState(() {
+        suggestions = result;
+      });
+    } catch (e) {
+      setState(() {
+        suggestions = [];
+      });
+    } finally {
       if (mounted) {
         setState(() {
-          suggestions = [];
           searching = false;
         });
       }
@@ -256,17 +369,26 @@ class _DhanautoHomeState extends State<DhanautoHome> {
   }
 
   Future<void> selectPlace(
-    Map<String, dynamic> place,
+    Map<String, dynamic> suggestion,
   ) async {
-    if (mapsApiKey.isEmpty) return;
+    if (mapsApiKey.isEmpty) {
+      return;
+    }
+
+    final String placeId =
+        suggestion['placeId'] ?? '';
+
+    if (placeId.isEmpty) {
+      return;
+    }
 
     try {
-      final uri = Uri.parse(
-        'https://places.googleapis.com/v1/places/${place['placeId']}',
+      final Uri url = Uri.parse(
+        'https://places.googleapis.com/v1/places/$placeId',
       );
 
       final response = await http.get(
-        uri,
+        url,
         headers: {
           'X-Goog-Api-Key': mapsApiKey,
           'X-Goog-FieldMask':
@@ -274,150 +396,62 @@ class _DhanautoHomeState extends State<DhanautoHome> {
         },
       );
 
-      if (response.statusCode != 200) return;
+      if (response.statusCode != 200) {
+        return;
+      }
 
-      final data = jsonDecode(response.body);
-      final location = data['location'];
+      final data =
+          jsonDecode(response.body);
 
-      if (location == null) return;
+      final location =
+          data['location'];
 
-      final point = LatLng(
+      if (location == null) {
+        return;
+      }
+
+      final LatLng point = LatLng(
         (location['latitude'] as num).toDouble(),
         (location['longitude'] as num).toDouble(),
       );
 
       if (!_insideArea(point)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'यो location Dhanauto service area बाहिर छ।',
-              ),
-            ),
-          );
-        }
+        _showMessage(
+          'यो location service area बाहिर छ।',
+        );
         return;
       }
 
-      final name =
+      final String name =
           data['displayName']?['text'] ??
-          place['text'];
+              suggestion['text'] ??
+              'Selected location';
 
       setState(() {
         if (activeField == 'pickup') {
-          pickup = point;
+          pickupLocation = point;
           pickupController.text = name;
         } else {
-          destination = point;
+          destinationLocation = point;
           destinationController.text = name;
         }
 
         suggestions = [];
       });
 
+      _updateMarkers();
+
       await mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(point, 14),
-      );
-    } catch (_) {}
-  }
-
-  void _onMapTap(LatLng point) {
-    if (!_insideArea(point)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'यो Dhanauto service area बाहिर छ।',
-          ),
+        CameraUpdate.newLatLngZoom(
+          point,
+          15,
         ),
       );
-      return;
-    }
-
-    setState(() {
-      if (activeField == 'pickup') {
-        pickup = point;
-      } else {
-        destination = point;
-      }
-    });
-  }
-
-  void _findDhanauto() {
-    if (destination == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'पहिला destination छान्नुहोस्।',
-          ),
-        ),
+    } catch (e) {
+      _showMessage(
+        'Location select गर्न सकिएन।',
       );
-      return;
     }
-
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              8,
-              20,
-              24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ListTile(
-                  leading: Icon(
-                    Icons.electric_rickshaw,
-                    color: Colors.red,
-                    size: 36,
-                  ),
-                  title: Text(
-                    'Dhanauto E-Rickshaw',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                  subtitle: Text('Estimated fare'),
-                  trailing: Text(
-                    'Rs. 120',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Ride request पठाइयो!',
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Request Dhanauto',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Widget _locationField({
@@ -426,56 +460,106 @@ class _DhanautoHomeState extends State<DhanautoHome> {
     required String fieldName,
     required IconData icon,
   }) {
-    final isActive = activeField == fieldName;
-
     return TextField(
       controller: controller,
       onTap: () {
         setState(() {
           activeField = fieldName;
-          suggestions = [];
         });
       },
-      onChanged: (value) {
-        setState(() {
-          activeField = fieldName;
-        });
-
-        _onSearchChanged(value);
-      },
+      onChanged: _onTextChanged,
       decoration: InputDecoration(
         prefixIcon: Icon(icon),
-        suffixIcon: controller.text.isNotEmpty
-            ? IconButton(
-                onPressed: () {
-                  controller.clear();
-
-                  setState(() {
-                    suggestions = [];
-                  });
-                },
-                icon: const Icon(Icons.clear),
-              )
-            : null,
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: isActive
-                ? Colors.red
-                : Colors.black12,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
+        border: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  void _findDhanauto() {
+    if (pickupLocation == null) {
+      _showMessage(
+        'पहिला A pickup location राख्नुहोस्।',
+      );
+      return;
+    }
+
+    if (destinationLocation == null) {
+      _showMessage(
+        'पहिला B destination location राख्नुहोस्।',
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Dhanauto E-Rickshaw',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Estimated fare',
+                style: TextStyle(
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Rs. 120',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+
+                    _showMessage(
+                      'Ride request पठाइयो!',
+                    );
+                  },
+                  child: const Text(
+                    'Request Dhanauto',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -485,16 +569,27 @@ class _DhanautoHomeState extends State<DhanautoHome> {
       body: Stack(
         children: [
           GoogleMap(
-            initialCameraPosition: const CameraPosition(
+            initialCameraPosition:
+                const CameraPosition(
               target: defaultCenter,
-              zoom: 9.5,
+              zoom: 8,
             ),
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: false,
+            compassEnabled: true,
             markers: markers,
             onMapCreated: (controller) {
               mapController = controller;
+
+              if (currentLocation != null) {
+                controller.animateCamera(
+                  CameraUpdate.newLatLngZoom(
+                    currentLocation!,
+                    14,
+                  ),
+                );
+              }
             },
             onTap: _onMapTap,
           ),
@@ -503,37 +598,40 @@ class _DhanautoHomeState extends State<DhanautoHome> {
             child: Column(
               children: [
                 Container(
-                  margin: const EdgeInsets.fromLTRB(
-                    12,
-                    12,
-                    12,
-                    0,
+                  margin: const EdgeInsets.all(12),
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
                   ),
-                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
+                    borderRadius:
+                        BorderRadius.circular(18),
+                    boxShadow: [
                       BoxShadow(
-                        blurRadius: 12,
-                        color: Colors.black26,
+                        blurRadius: 10,
+                        color: Colors.black
+                            .withOpacity(0.15),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                        width: 45,
+                        height: 45,
+                        decoration:
+                            const BoxDecoration(
+                          color: Colors.red,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.electric_rickshaw,
-                          color: Colors.red,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -542,7 +640,7 @@ class _DhanautoHomeState extends State<DhanautoHome> {
                             Text(
                               'Dhanauto',
                               style: TextStyle(
-                                fontSize: 21,
+                                fontSize: 22,
                                 fontWeight:
                                     FontWeight.bold,
                               ),
@@ -550,8 +648,8 @@ class _DhanautoHomeState extends State<DhanautoHome> {
                             Text(
                               'Mahendranagar • Fulbari • Dhangadhi • Karnali',
                               style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
+                                fontSize: 11,
+                                color: Colors.grey,
                               ),
                             ),
                           ],
@@ -561,90 +659,98 @@ class _DhanautoHomeState extends State<DhanautoHome> {
                   ),
                 ),
 
-                Container(
-                  margin: const EdgeInsets.fromLTRB(
-                    12,
-                    10,
-                    12,
-                    0,
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 12,
-                        color: Colors.black26,
-                      ),
-                    ],
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 12,
                   ),
                   child: Column(
                     children: [
                       _locationField(
-                        controller: pickupController,
-                        hint: 'Pickup location',
+                        controller:
+                            pickupController,
+                        hint: 'A',
                         fieldName: 'pickup',
-                        icon: Icons.my_location,
+                        icon:
+                            Icons.my_location,
                       ),
-                      const SizedBox(height: 9),
+
+                      const SizedBox(height: 8),
+
                       _locationField(
                         controller:
                             destinationController,
-                        hint: 'Where to?',
-                        fieldName: 'destination',
-                        icon: Icons.location_on,
+                        hint: 'B',
+                        fieldName:
+                            'destination',
+                        icon:
+                            Icons.location_on,
                       ),
 
                       if (searching)
-                        const Padding(
-                          padding: EdgeInsets.all(10),
+                        Container(
+                          margin:
+                              const EdgeInsets.only(
+                            top: 5,
+                          ),
+                          padding:
+                              const EdgeInsets.all(
+                            12,
+                          ),
+                          color: Colors.white,
                           child:
-                              LinearProgressIndicator(),
+                              const LinearProgressIndicator(),
                         ),
 
                       if (suggestions.isNotEmpty)
                         Container(
                           margin:
                               const EdgeInsets.only(
-                            top: 8,
+                            top: 5,
                           ),
-                          constraints:
-                              const BoxConstraints(
-                            maxHeight: 220,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Colors.black12,
-                            ),
+                          decoration:
+                              BoxDecoration(
+                            color: Colors.white,
                             borderRadius:
-                                BorderRadius.circular(12),
+                                BorderRadius.circular(
+                              12,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                blurRadius: 8,
+                                color: Colors.black
+                                    .withOpacity(
+                                  0.12,
+                                ),
+                              ),
+                            ],
                           ),
-                          child: ListView.separated(
+                          child: ListView.builder(
                             shrinkWrap: true,
                             itemCount:
                                 suggestions.length,
-                            separatorBuilder:
-                                (_, __) =>
-                                    const Divider(
-                                  height: 1,
-                                ),
                             itemBuilder:
                                 (context, index) {
                               final item =
-                                  suggestions[index];
+                                  suggestions[
+                                      index];
 
                               return ListTile(
-                                dense: true,
-                                leading: const Icon(
-                                  Icons
-                                      .location_on_outlined,
+                                leading:
+                                    const Icon(
+                                  Icons.place,
+                                  color:
+                                      Colors.red,
                                 ),
                                 title: Text(
-                                  item['text'],
+                                  item['text'] ??
+                                      '',
                                 ),
-                                onTap: () =>
-                                    selectPlace(item),
+                                onTap: () {
+                                  selectPlace(
+                                    item,
+                                  );
+                                },
                               );
                             },
                           ),
@@ -652,62 +758,24 @@ class _DhanautoHomeState extends State<DhanautoHome> {
                     ],
                   ),
                 ),
-
-                const Spacer(),
-
-                Container(
-                  margin: const EdgeInsets.fromLTRB(
-                    12,
-                    0,
-                    12,
-                    12,
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 10,
-                        color: Colors.black26,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Map मा tap गर्नुहोस् वा marker drag गर्नुहोस्।',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.black54,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton.icon(
-                          onPressed: _findDhanauto,
-                          icon: const Icon(
-                            Icons.search,
-                          ),
-                          label: const Text(
-                            'Find Dhanauto',
-                            style: TextStyle(
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
+
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 20,
+            child: Column(
+              children: [
+                if (gettingLocation)
+                  Container(
+                    margin:
+                        const EdgeInsets.only(
+                      bottom: 8,
+                    ),
+                    padding:
+                        const EdgeInsets.all(10),
+                    decoration:
+                        BoxDecoration(
+                      color: 
