@@ -6,8 +6,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
-const String mapsApiKey =
-    String.fromEnvironment('MAPS_API_KEY', defaultValue: '');
+const String mapsApiKey = String.fromEnvironment(
+  'MAPS_API_KEY',
+  defaultValue: '',
+);
 
 const LatLng defaultCenter = LatLng(28.70, 80.60);
 
@@ -67,7 +69,6 @@ class _HomePageState extends State<HomePage> {
   LatLng? destinationLocation;
 
   Set<Marker> markers = {};
-
   List<Map<String, dynamic>> suggestions = [];
 
   bool searching = false;
@@ -99,7 +100,7 @@ class _HomePageState extends State<HomePage> {
       followLiveLocation = true;
     });
 
-    bool serviceEnabled =
+    final bool serviceEnabled =
         await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
@@ -112,6 +113,7 @@ class _HomePageState extends State<HomePage> {
       _showMessage(
         'Location service ON गर्नुहोस्।',
       );
+
       return;
     }
 
@@ -134,11 +136,12 @@ class _HomePageState extends State<HomePage> {
       _showMessage(
         'Live location permission चाहिन्छ।',
       );
+
       return;
     }
 
     try {
-      Position position =
+      final Position position =
           await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -156,7 +159,8 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           currentLocation = live;
           pickupLocation = live;
-          pickupController.text = 'My live location';
+          pickupController.text =
+              'My live location';
         });
 
         _updateMarkers();
@@ -248,7 +252,8 @@ class _HomePageState extends State<HomePage> {
     if (destinationLocation != null) {
       newMarkers.add(
         Marker(
-          markerId: const MarkerId('destination'),
+          markerId:
+              const MarkerId('destination'),
           position: destinationLocation!,
           draggable: true,
           infoWindow: const InfoWindow(
@@ -265,7 +270,8 @@ class _HomePageState extends State<HomePage> {
             if (!mounted) return;
 
             setState(() {
-              destinationLocation = newPosition;
+              destinationLocation =
+                  newPosition;
             });
 
             _updateMarkers();
@@ -316,6 +322,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         suggestions = [];
       });
+
       return;
     }
 
@@ -327,7 +334,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> searchPlaces(String input) async {
+  Future<void> searchPlaces(
+    String input,
+  ) async {
     if (mapsApiKey.isEmpty) {
       return;
     }
@@ -377,12 +386,15 @@ class _HomePageState extends State<HomePage> {
             suggestions = [];
           });
         }
+
         return;
       }
 
-      final data = jsonDecode(response.body);
+      final data =
+          jsonDecode(response.body);
 
-      final List<Map<String, dynamic>> result = [];
+      final List<Map<String, dynamic>>
+          result = [];
 
       final List<dynamic> list =
           data['suggestions'] ?? [];
@@ -396,9 +408,11 @@ class _HomePageState extends State<HomePage> {
         }
 
         result.add({
-          'placeId': prediction['placeId'],
+          'placeId':
+              prediction['placeId'],
           'text':
-              prediction['text']?['text'] ?? '',
+              prediction['text']?['text'] ??
+                  '',
         });
       }
 
@@ -454,10 +468,12 @@ class _HomePageState extends State<HomePage> {
         _showMessage(
           'Location खोज्न सकिएन।',
         );
+
         return;
       }
 
-      final data = jsonDecode(response.body);
+      final data =
+          jsonDecode(response.body);
 
       final location = data['location'];
 
@@ -466,14 +482,17 @@ class _HomePageState extends State<HomePage> {
       }
 
       final LatLng point = LatLng(
-        (location['latitude'] as num).toDouble(),
-        (location['longitude'] as num).toDouble(),
+        (location['latitude'] as num)
+            .toDouble(),
+        (location['longitude'] as num)
+            .toDouble(),
       );
 
       if (!_insideArea(point)) {
         _showMessage(
           'यो location service area बाहिर छ।',
         );
+
         return;
       }
 
@@ -556,6 +575,7 @@ class _HomePageState extends State<HomePage> {
       _showMessage(
         'पहिला A pickup location राख्नुहोस्।',
       );
+
       return;
     }
 
@@ -563,6 +583,7 @@ class _HomePageState extends State<HomePage> {
       _showMessage(
         'पहिला B destination location राख्नुहोस्।',
       );
+
       return;
     }
 
@@ -571,19 +592,24 @@ class _HomePageState extends State<HomePage> {
       showDragHandle: true,
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.all(20),
+          padding:
+              const EdgeInsets.all(20),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:
+                MainAxisSize.min,
             children: [
               const Text(
                 'Dhanauto E-Rickshaw',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(
+                height: 10,
+              ),
 
               const Text(
                 'Estimated fare',
@@ -592,23 +618,30 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              const SizedBox(height: 4),
+              const SizedBox(
+                height: 4,
+              ),
 
               const Text(
                 'Rs. 120',
                 style: TextStyle(
                   fontSize: 30,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
 
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
 
                     _showMessage(
                       'Ride request पठाइयो!',
@@ -620,7 +653,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(
+                height: 10,
+              ),
             ],
           ),
         );
@@ -640,22 +675,29 @@ class _HomePageState extends State<HomePage> {
               zoom: 8,
             ),
             myLocationEnabled: true,
-            myLocationButtonEnabled: true,
+            myLocationButtonEnabled:
+                true,
             zoomControlsEnabled: false,
             compassEnabled: true,
             markers: markers,
-            onMapCreated: (controller) {
-              mapController = controller;
 
-              if (currentLocation != null) {
+            onMapCreated:
+                (controller) {
+              mapController =
+                  controller;
+
+              if (currentLocation !=
+                  null) {
                 controller.animateCamera(
-                  CameraUpdate.newLatLngZoom(
+                  CameraUpdate
+                      .newLatLngZoom(
                     currentLocation!,
                     15,
                   ),
                 );
               }
             },
+
             onTap: _onMapTap,
           ),
 
@@ -664,21 +706,29 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Container(
                   margin:
-                      const EdgeInsets.all(12),
+                      const EdgeInsets.all(
+                    12,
+                  ),
                   padding:
-                      const EdgeInsets.symmetric(
+                      const EdgeInsets
+                          .symmetric(
                     horizontal: 18,
                     vertical: 14,
                   ),
-                  decoration: BoxDecoration(
+                  decoration:
+                      BoxDecoration(
                     color: Colors.white,
                     borderRadius:
-                        BorderRadius.circular(18),
+                        BorderRadius.circular(
+                      18,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         blurRadius: 10,
                         color: Colors.black
-                            .withOpacity(0.15),
+                            .withOpacity(
+                          0.15,
+                        ),
                       ),
                     ],
                   ),
@@ -690,34 +740,46 @@ class _HomePageState extends State<HomePage> {
                         decoration:
                             const BoxDecoration(
                           color: Colors.red,
-                          shape: BoxShape.circle,
+                          shape:
+                              BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.electric_rickshaw,
-                          color: Colors.white,
+                        child:
+                            const Icon(
+                          Icons
+                              .electric_rickshaw,
+                          color:
+                              Colors.white,
                         ),
                       ),
 
-                      const SizedBox(width: 12),
+                      const SizedBox(
+                        width: 12,
+                      ),
 
                       const Expanded(
                         child: Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              CrossAxisAlignment
+                                  .start,
                           children: [
                             Text(
                               'Dhanauto',
-                              style: TextStyle(
+                              style:
+                                  TextStyle(
                                 fontSize: 22,
                                 fontWeight:
-                                    FontWeight.bold,
+                                    FontWeight
+                                        .bold,
                               ),
                             ),
+
                             Text(
                               'Mahendranagar • Fulbari • Dhangadhi • Karnali',
-                              style: TextStyle(
+                              style:
+                                  TextStyle(
                                 fontSize: 11,
-                                color: Colors.grey,
+                                color:
+                                    Colors.grey,
                               ),
                             ),
                           ],
@@ -729,7 +791,8 @@ class _HomePageState extends State<HomePage> {
 
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(
+                      const EdgeInsets
+                          .symmetric(
                     horizontal: 12,
                   ),
                   child: Column(
@@ -738,12 +801,15 @@ class _HomePageState extends State<HomePage> {
                         controller:
                             pickupController,
                         hint: 'A',
-                        fieldName: 'pickup',
+                        fieldName:
+                            'pickup',
                         icon:
                             Icons.my_location,
                       ),
 
-                      const SizedBox(height: 8),
+                      const SizedBox(
+                        height: 8,
+                      ),
 
                       _locationField(
                         controller:
@@ -758,53 +824,27 @@ class _HomePageState extends State<HomePage> {
                       if (searching)
                         Container(
                           margin:
-                              const EdgeInsets.only(
+                              const EdgeInsets
+                                  .only(
                             top: 5,
                           ),
                           padding:
-                              const EdgeInsets.all(
+                              const EdgeInsets
+                                  .all(
                             12,
                           ),
-                          color: Colors.white,
+                          color:
+                              Colors.white,
                           child:
                               const LinearProgressIndicator(),
                         ),
 
-                      if (suggestions.isNotEmpty)
+                      if (suggestions
+                          .isNotEmpty)
                         Container(
                           margin:
-                              const EdgeInsets.only(
+                              const EdgeInsets
+                                  .only(
                             top: 5,
                           ),
-                          constraints:
-                              const BoxConstraints(
-                            maxHeight: 250,
-                          ),
-                          decoration:
-                              BoxDecoration(
-                            color: Colors.white,
-                            borderRadius:
-                                BorderRadius.circular(
-                              12,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                blurRadius: 8,
-                                color: Colors.black
-                                    .withOpacity(
-                                  0.12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount:
-                                suggestions.length,
-                            itemBuilder:
-                                (context, index) {
-                              final suggestion =
-                                  suggestions[index];
-
-                              return ListTile(
-                             
+     
